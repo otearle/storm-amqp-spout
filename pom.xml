@@ -1,18 +1,23 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.xorlev.storm</groupId>
+    <groupId>org.clojars.brenden</groupId>
     <artifactId>storm-amqp-spout</artifactId>
     <version>0.2.1-SNAPSHOT</version>
 
     <name>Storm AMQP Spout</name>
     <description>AMQP input source for Storm</description>
-    <url>http://xorlev.github.com/storm-amqp-spout</url>
+	<url>http://github.com/brndnmtthws/storm-amqp-spout</url>
 
     <developers>
         <developer>
             <name>Michael Rose</name>
             <email>elementation@gmail.com</email>
             <url>http://www.xorlev.com</url>
+        </developer>
+        <developer>
+            <name>Brenden Matthews</name>
+            <email>brenden@diddyinc.com</email>
+			<url>http://diddyinc.com/</url>
         </developer>
     </developers>
 
@@ -24,9 +29,9 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:git@github.com:Xorlev/storm-amqp-spout.git</connection>
-        <url>http://github.com/Xorlev/storm-amqp-spout</url>
-        <developerConnection>scm:git:git@github.com:Xorlev/storm-amqp-spout.git</developerConnection>
+        <connection>scm:git:git@github.com:brndnmtthws/storm-amqp-spout.git</connection>
+        <url>http://github.com/brndnmtthws/storm-amqp-spout</url>
+        <developerConnection>scm:git:git@github.com:brndnmtthws/storm-amqp-spout.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 
