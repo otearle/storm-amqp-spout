@@ -1,6 +1,8 @@
 package com.rapportive.storm.amqp;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.rabbitmq.client.AMQP.Queue;
 
@@ -30,6 +32,7 @@ public class SharedQueueWithBinding implements QueueDeclaration {
     private final String exchange;
     private final String routingKey;
     private HAPolicy haPolicy;
+	private long queue_ttl;
 
     /**
      * Create a declaration of a named, durable, non-exclusive queue bound to
@@ -40,8 +43,8 @@ public class SharedQueueWithBinding implements QueueDeclaration {
      * @param routingKey  routing key for the exchange binding.  Use "#" to
      *                    receive all messages published to the exchange.
      */
-    public SharedQueueWithBinding(String queueName, String exchange, String routingKey) {
-        this(queueName, exchange, routingKey, null);
+    public SharedQueueWithBinding(String queueName, String exchange, String routingKey, long queue_ttl) {
+        this(queueName, exchange, routingKey, null, queue_ttl);
     }
 
     /**
@@ -54,11 +57,13 @@ public class SharedQueueWithBinding implements QueueDeclaration {
      *                    receive all messages published to the exchange.
      * @param policy  high-availability policy to use
      */
-    public SharedQueueWithBinding(String queueName, String exchange, String routingKey, HAPolicy policy) {
+	public SharedQueueWithBinding(String queueName, String exchange, String
+			routingKey, HAPolicy policy, long queue_ttl) {
         this.queueName = queueName;
         this.exchange = exchange;
         this.routingKey = routingKey;
         this.haPolicy = policy;
+		this.queue_ttl = queue_ttl;
     }
 
     /**
@@ -72,14 +77,20 @@ public class SharedQueueWithBinding implements QueueDeclaration {
      */
     @Override
     public Queue.DeclareOk declare(Channel channel) throws IOException {
+		Map<String, Object> args = new HashMap<String, Object>();
+		args.put("x-message-ttl", queue_ttl);
         channel.exchangeDeclarePassive(exchange);
+
+		if (haPolicy != null) {
+			args.putAll(haPolicy.asQueueProperties());
+		}
 
         final Queue.DeclareOk queue = channel.queueDeclare(
                 queueName,
                 /* durable */ true,
                 /* non-exclusive */ false,
                 /* non-auto-delete */ false,
-                haPolicy == null ? null /* no arguments */ : haPolicy.asQueueProperies());
+				args);
 
         channel.queueBind(queue.getQueue(), exchange, routingKey);
 

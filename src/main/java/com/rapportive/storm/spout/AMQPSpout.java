@@ -15,6 +15,7 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.QueueingConsumer;
 import com.rabbitmq.client.ShutdownSignalException;
+import com.rabbitmq.client.ConsumerCancelledException;
 
 import com.rapportive.storm.amqp.QueueDeclaration;
 import backtype.storm.spout.Scheme;
@@ -172,7 +173,7 @@ public class AMQPSpout implements IRichSpout {
         this.amqpVhost = vhost;
         this.queueDeclaration = queueDeclaration;
         this.requeueOnFail = requeueOnFail;
-        
+
         this.serialisationScheme = scheme;
     }
 
@@ -246,10 +247,10 @@ public class AMQPSpout implements IRichSpout {
      * Tells the AMQP broker to drop (Basic.Reject) the message.
      *
      * requeueOnFail constructor parameter determines whether the message will be requeued.
-     * 
+     *
      * <p><strong>N.B.</strong> There's a potential for infinite
      * redelivery in the event of non-transient failures (e.g. malformed
-     * messages). 
+     * messages).
      *
      */
     @Override
@@ -298,6 +299,12 @@ public class AMQPSpout implements IRichSpout {
                 }
             } catch (ShutdownSignalException e) {
                 log.warn("AMQP connection dropped, will attempt to reconnect...");
+                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+                reconnect();
+            } catch (ConsumerCancelledException e) {
+                log.warn("AMQP consumer cancelled, will attempt to reconnect...");
+                amqpConsumerTag = null;
+                close();
                 Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
                 reconnect();
             } catch (InterruptedException e) {
