@@ -259,7 +259,11 @@ public class AMQPSpout implements IRichSpout {
             final long deliveryTag = (Long) msgId;
             if (amqpChannel != null) {
                 try {
-                    amqpChannel.basicReject(deliveryTag, requeueOnFail);
+					if (amqpChannel.isOpen()) {
+						amqpChannel.basicReject(deliveryTag, requeueOnFail);
+					} else {
+						reconnect();
+					}
                 } catch (IOException e) {
                     log.warn("Failed to reject delivery-tag " + deliveryTag, e);
                 }
@@ -303,8 +307,6 @@ public class AMQPSpout implements IRichSpout {
                 reconnect();
             } catch (ConsumerCancelledException e) {
                 log.warn("AMQP consumer cancelled, will attempt to reconnect...");
-                amqpConsumerTag = null;
-                close();
                 Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
                 reconnect();
             } catch (InterruptedException e) {
