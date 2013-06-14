@@ -11,28 +11,38 @@ public class HAPolicy implements Serializable {
     private Map<String, Object> queueProperties;
 
     private HAPolicy(Map<String, Object> queueParams) {
-        this.queueProperties = queueParams;
+	this.queueProperties = queueParams;
     }
 
     public static HAPolicy all() {
-        HashMap<String, Object> args = new HashMap<String, Object>();
-        args.put("x-ha-policy", "all");
-        return new HAPolicy(args);
+	HashMap<String, Object> args = new HashMap<String, Object>();
+	args.put("x-ha-policy", "all");
+	args.put("x-ha-x-ha-sync-mode", "automatic");
+	return new HAPolicy(args);
+    }
+
+    public static HAPolicy exactly(int count) {
+	HashMap<String, Object> args = new HashMap<String, Object>();
+	args.put("x-ha-policy", "exactly");
+	args.put("x-ha-x-ha-policy-params", count);
+	args.put("x-ha-x-ha-sync-mode", "automatic");
+	return new HAPolicy(args);
     }
 
     public static HAPolicy nodes(String... nodeNames) {
-        if (nodeNames.length < 1) {
-            throw new IllegalArgumentException("List of nodenames should contain at least one name");
-		}
+	if (nodeNames.length < 1) {
+	    throw new IllegalArgumentException("List of nodenames should contain at least one name");
+	}
 
-        HashMap<String, Object> args = new HashMap<String, Object>();
-        args.put("x-ha-policy", "nodes");
-        args.put("x-ha-x-ha-policy-params", Arrays.asList(nodeNames));
+	HashMap<String, Object> args = new HashMap<String, Object>();
+	args.put("x-ha-policy", "nodes");
+	args.put("x-ha-x-ha-policy-params", Arrays.asList(nodeNames));
+	args.put("x-ha-x-ha-sync-mode", "automatic");
 
-        return new HAPolicy(args);
+	return new HAPolicy(args);
     }
 
     public Map<String, Object> asQueueProperties() {
-        return queueProperties;
+	return queueProperties;
     }
 }

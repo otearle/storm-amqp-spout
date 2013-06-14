@@ -32,7 +32,7 @@ public class SharedQueueWithBinding implements QueueDeclaration {
     private final String exchange;
     private final String routingKey;
     private HAPolicy haPolicy;
-	private long queue_ttl;
+    private long queue_ttl;
 
     /**
      * Create a declaration of a named, durable, non-exclusive queue bound to
@@ -62,8 +62,8 @@ public class SharedQueueWithBinding implements QueueDeclaration {
         this.queueName = queueName;
         this.exchange = exchange;
         this.routingKey = routingKey;
-        this.haPolicy = policy;
-		this.queue_ttl = queue_ttl;
+	this.haPolicy = policy;
+	this.queue_ttl = queue_ttl;
     }
 
     /**
@@ -77,24 +77,25 @@ public class SharedQueueWithBinding implements QueueDeclaration {
      */
     @Override
     public Queue.DeclareOk declare(Channel channel) throws IOException {
-		Map<String, Object> args = new HashMap<String, Object>();
-		args.put("x-message-ttl", queue_ttl);
-        channel.exchangeDeclarePassive(exchange);
+	Map<String, Object> args = new HashMap<String, Object>();
+	args.put("x-message-ttl", queue_ttl);
+	args.put("x-message-ttl", queue_ttl);
+	channel.exchangeDeclarePassive(exchange);
 
-		if (haPolicy != null) {
-			args.putAll(haPolicy.asQueueProperties());
-		}
+	if (haPolicy != null) {
+	    args.putAll(haPolicy.asQueueProperties());
+	}
 
-        final Queue.DeclareOk queue = channel.queueDeclare(
-                queueName,
-                /* durable */ true,
-                /* non-exclusive */ false,
-                /* non-auto-delete */ false,
-				args);
+	final Queue.DeclareOk queue = channel.queueDeclare(
+		queueName,
+		/* durable */ true,
+		/* non-exclusive */ false,
+		/* non-auto-delete */ false,
+		args);
 
-        channel.queueBind(queue.getQueue(), exchange, routingKey);
+	channel.queueBind(queue.getQueue(), exchange, routingKey);
 
-        return queue;
+	return queue;
     }
 
     /**
