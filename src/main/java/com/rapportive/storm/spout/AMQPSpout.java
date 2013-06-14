@@ -336,6 +336,9 @@ public class AMQPSpout implements IRichSpout {
             setupAMQP();
         } catch (IOException e) {
             log.error("AMQP setup failed", e);
+	    log.warn("AMQP setup failed, will attempt to reconnect...");
+	    Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+	    reconnect();
         }
     }
 
