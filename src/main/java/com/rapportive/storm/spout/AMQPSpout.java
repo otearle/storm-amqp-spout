@@ -98,7 +98,8 @@ public class AMQPSpout implements IRichSpout {
     /**
      * Name of the stream where malformed deserialized messages are sent for
      * special handling. Generally with a {@link Scheme} implementation returns
-     * null or a zero-length tuple
+	 * null or a zero-length tuple.  `enableErrorStream` must be true at
+	 * construction.
      */
     public static String ERROR_STREAM_NAME = "error-stream";
 
@@ -108,6 +109,7 @@ public class AMQPSpout implements IRichSpout {
     private final String amqpPassword;
     private final String amqpVhost;
     private final boolean requeueOnFail;
+	private final boolean enableErrorStream;
 
     private final QueueDeclaration queueDeclaration;
 
@@ -131,7 +133,7 @@ public class AMQPSpout implements IRichSpout {
      * will declare a queue according to the specified
      * <tt>queueDeclaration</tt>, subscribe to the queue, and start consuming
      * messages.  It will use the provided <tt>scheme</tt> to deserialise each
-     * AMQP message into a Storm tuple. Note that failed messages will not be 
+     * AMQP message into a Storm tuple. Note that failed messages will not be
      * requeued.
      *
      * @param host  hostname of the AMQP broker node
@@ -144,7 +146,7 @@ public class AMQPSpout implements IRichSpout {
      *          each AMQP message into a Storm tuple
      */
     public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
-        this(host, port, username, password, vhost, queueDeclaration, scheme, false);
+        this(host, port, username, password, vhost, queueDeclaration, scheme, false, true);
     }
 
     /**
@@ -163,9 +165,10 @@ public class AMQPSpout implements IRichSpout {
      * @param queueDeclaration  declaration of the queue / exchange bindings
      * @param scheme  {@link backtype.storm.spout.Scheme} used to deserialise
      *          each AMQP message into a Storm tuple
-     * @param requeueOnFail  whether messages should be requeued on failure 
+     * @param requeueOnFail  whether messages should be requeued on failure
+	 * @param enableErrorStream  emit error stream
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail) {
+    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail, boolean enableErrorStream) {
         this.amqpHost = host;
         this.amqpPort = port;
         this.amqpUsername = username;
@@ -173,6 +176,7 @@ public class AMQPSpout implements IRichSpout {
         this.amqpVhost = vhost;
         this.queueDeclaration = queueDeclaration;
         this.requeueOnFail = requeueOnFail;
+		this.enableErrorStream = enableErrorStream;
 
         this.serialisationScheme = scheme;
     }
@@ -352,7 +356,9 @@ public class AMQPSpout implements IRichSpout {
     private void handleMalformedDelivery(long deliveryTag, byte[] message) {
         log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
         ack(deliveryTag);
-        collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
+		if (enableErrorStream) {
+			collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
+		}
     }
 
 
@@ -402,7 +408,9 @@ public class AMQPSpout implements IRichSpout {
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declare(serialisationScheme.getOutputFields());
-        declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+		if (enableErrorStream) {
+			declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+		}
     }
 
     @Override

@@ -26,83 +26,62 @@ import com.rabbitmq.client.Channel;
  * to outages).</p>
  */
 public class SharedQueueWithBinding implements QueueDeclaration {
-    private static final long serialVersionUID = 2364833412534518859L;
+	private static final long serialVersionUID = 2364833412534518859L;
 
-    private final String queueName;
-    private final String exchange;
-    private final String routingKey;
-    private HAPolicy haPolicy;
-    private long queue_ttl;
+	private final String queueName;
+	private final String exchange;
+	private final String routingKey;
+	private long queue_ttl;
 
-    /**
-     * Create a declaration of a named, durable, non-exclusive queue bound to
-     * the specified exchange.
-     *
-     * @param queueName  name of the queue to be declared.
-     * @param exchange  exchange to bind the queue to.
-     * @param routingKey  routing key for the exchange binding.  Use "#" to
-     *                    receive all messages published to the exchange.
-     */
-    public SharedQueueWithBinding(String queueName, String exchange, String routingKey, long queue_ttl) {
-        this(queueName, exchange, routingKey, null, queue_ttl);
-    }
-
-    /**
-     * Create a declaration of a named, durable, non-exclusive queue bound to
-     * the specified exchange.
-     *
-     * @param queueName  name of the queue to be declared.
-     * @param exchange  exchange to bind the queue to.
-     * @param routingKey  routing key for the exchange binding.  Use "#" to
-     *                    receive all messages published to the exchange.
-     * @param policy  high-availability policy to use
-     */
+	/**
+	 * Create a declaration of a named, durable, non-exclusive queue bound to
+	 * the specified exchange.
+	 *
+	 * @param queueName  name of the queue to be declared.
+	 * @param exchange  exchange to bind the queue to.
+	 * @param routingKey  routing key for the exchange binding.  Use "#" to
+	 *                    receive all messages published to the exchange.
+	 */
 	public SharedQueueWithBinding(String queueName, String exchange, String
-			routingKey, HAPolicy policy, long queue_ttl) {
-        this.queueName = queueName;
-        this.exchange = exchange;
-        this.routingKey = routingKey;
-	this.haPolicy = policy;
-	this.queue_ttl = queue_ttl;
-    }
-
-    /**
-     * Verifies the exchange exists, creates the named queue if it does not
-     * exist, and binds it to the exchange.
-     *
-     * @return the server's response to the successful queue declaration.
-     *
-     * @throws IOException  if the exchange does not exist, the queue could not
-     *                      be declared, or if the AMQP connection drops.
-     */
-    @Override
-    public Queue.DeclareOk declare(Channel channel) throws IOException {
-	Map<String, Object> args = new HashMap<String, Object>();
-	args.put("x-message-ttl", queue_ttl);
-	args.put("x-message-ttl", queue_ttl);
-	channel.exchangeDeclarePassive(exchange);
-
-	if (haPolicy != null) {
-	    args.putAll(haPolicy.asQueueProperties());
+			routingKey, long queue_ttl) {
+		this.queueName = queueName;
+		this.exchange = exchange;
+		this.routingKey = routingKey;
+		this.queue_ttl = queue_ttl;
 	}
 
-	final Queue.DeclareOk queue = channel.queueDeclare(
-		queueName,
-		/* durable */ true,
-		/* non-exclusive */ false,
-		/* non-auto-delete */ false,
-		args);
+	/**
+	 * Verifies the exchange exists, creates the named queue if it does not
+	 * exist, and binds it to the exchange.
+	 *
+	 * @return the server's response to the successful queue declaration.
+	 *
+	 * @throws IOException  if the exchange does not exist, the queue could not
+	 *                      be declared, or if the AMQP connection drops.
+	 */
+	@Override
+	public Queue.DeclareOk declare(Channel channel) throws IOException {
+		Map<String, Object> args = new HashMap<String, Object>();
+		args.put("x-message-ttl", queue_ttl);
+		channel.exchangeDeclarePassive(exchange);
 
-	channel.queueBind(queue.getQueue(), exchange, routingKey);
+		final Queue.DeclareOk queue = channel.queueDeclare(
+				queueName,
+				/* durable */ true,
+				/* non-exclusive */ false,
+				/* non-auto-delete */ false,
+				args);
 
-	return queue;
-    }
+		channel.queueBind(queue.getQueue(), exchange, routingKey);
 
-    /**
-     * Returns <tt>true</tt> as this queue is safe for parallel consumers.
-     */
-    @Override
-    public boolean isParallelConsumable() {
-        return true;
-    }
+		return queue;
+	}
+
+	/**
+	 * Returns <tt>true</tt> as this queue is safe for parallel consumers.
+	 */
+	@Override
+	public boolean isParallelConsumable() {
+		return true;
+	}
 }
