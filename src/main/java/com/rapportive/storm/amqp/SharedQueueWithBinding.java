@@ -31,7 +31,7 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	private final String queueName;
 	private final String exchange;
 	private final String routingKey;
-	private long queue_ttl;
+	private long queue_ttl, queue_expires, queue_max_length;
 
 	/**
 	 * Create a declaration of a named, durable, non-exclusive queue bound to
@@ -43,11 +43,14 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	 *                    receive all messages published to the exchange.
 	 */
 	public SharedQueueWithBinding(String queueName, String exchange, String
-			routingKey, long queue_ttl) {
+			routingKey, long queue_ttl, long queue_expires, long
+			queue_max_length) {
 		this.queueName = queueName;
 		this.exchange = exchange;
 		this.routingKey = routingKey;
 		this.queue_ttl = queue_ttl;
+		this.queue_expires = queue_expires;
+		this.queue_max_length = queue_max_length;
 	}
 
 	/**
@@ -63,6 +66,8 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	public Queue.DeclareOk declare(Channel channel) throws IOException {
 		Map<String, Object> args = new HashMap<String, Object>();
 		args.put("x-message-ttl", queue_ttl);
+		args.put("x-expires",     queue_expires);
+		args.put("x-max-length",  queue_max_length);
 		channel.exchangeDeclarePassive(exchange);
 
 		final Queue.DeclareOk queue = channel.queueDeclare(

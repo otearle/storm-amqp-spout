@@ -110,6 +110,7 @@ public class AMQPSpout implements IRichSpout {
     private final String amqpVhost;
     private final boolean requeueOnFail;
 	private final boolean enableErrorStream;
+	private final boolean autoAck;
 
     private final QueueDeclaration queueDeclaration;
 
@@ -145,8 +146,9 @@ public class AMQPSpout implements IRichSpout {
      * @param scheme  {@link backtype.storm.spout.Scheme} used to deserialise
      *          each AMQP message into a Storm tuple
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
-        this(host, port, username, password, vhost, queueDeclaration, scheme, false, true);
+	public AMQPSpout(String host, int port, String username, String password,
+			String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
+        this(host, port, username, password, vhost, queueDeclaration, scheme, false, true, false);
     }
 
     /**
@@ -168,7 +170,9 @@ public class AMQPSpout implements IRichSpout {
      * @param requeueOnFail  whether messages should be requeued on failure
 	 * @param enableErrorStream  emit error stream
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail, boolean enableErrorStream) {
+	public AMQPSpout(String host, int port, String username, String password,
+			String vhost, QueueDeclaration queueDeclaration, Scheme scheme,
+			boolean requeueOnFail, boolean enableErrorStream, boolean autoAck) {
         this.amqpHost = host;
         this.amqpPort = port;
         this.amqpUsername = username;
@@ -177,6 +181,7 @@ public class AMQPSpout implements IRichSpout {
         this.queueDeclaration = queueDeclaration;
         this.requeueOnFail = requeueOnFail;
 		this.enableErrorStream = enableErrorStream;
+		this.autoAck = autoAck;
 
         this.serialisationScheme = scheme;
     }
@@ -384,7 +389,7 @@ public class AMQPSpout implements IRichSpout {
         log.info("Consuming queue " + queueName);
 
         this.amqpConsumer = new QueueingConsumer(amqpChannel);
-        this.amqpConsumerTag = amqpChannel.basicConsume(queueName, false /* no auto-ack */, amqpConsumer);
+        this.amqpConsumerTag = amqpChannel.basicConsume(queueName, this.autoAck, amqpConsumer);
     }
 
 
