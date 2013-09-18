@@ -2,6 +2,7 @@ package com.rapportive.storm.spout;
 
 import java.io.IOException;
 import java.util.List;
+import java.net.Socket;
 import java.util.Map;
 
 import backtype.storm.tuple.Fields;
@@ -375,7 +376,14 @@ public class AMQPSpout implements IRichSpout {
     private void setupAMQP() throws IOException {
         final int prefetchCount = this.prefetchCount;
 
-        final ConnectionFactory connectionFactory = new ConnectionFactory();
+        final ConnectionFactory connectionFactory = new ConnectionFactory() {
+            public void configureSocket(Socket socket)
+                throws IOException {
+                socket.setTcpNoDelay(false);
+                socket.setReceiveBufferSize(20*1024);
+                socket.setSendBufferSize(20*1024);
+            }
+        };
 
         connectionFactory.setHost(amqpHost);
         connectionFactory.setPort(amqpPort);
