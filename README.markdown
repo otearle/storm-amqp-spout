@@ -47,9 +47,9 @@ To use in your `pom.xml`:
   <dependencies>
     <!-- ... -->
     <dependency>
-      <groupId>org.clojars.brenden</groupId>
+      <groupId>org.clojars.storm-amqp</groupId>
       <artifactId>storm-amqp-spout</artifactId>
-      <version>0.2.6-SNAPSHOT</version>
+      <version>0.2.7-SNAPSHOT</version>
     </dependency>
     <!-- ... -->
   </dependencies>
