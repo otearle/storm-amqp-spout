@@ -38,12 +38,18 @@ To use in your `pom.xml`:
 ```xml
 <project>
   <!-- ... -->
+  <repositories>
+    <repository>
+      <id>clojars</id>
+      <url>http://clojars.org/repo</url>
+    </repository>
+  </repositories>
   <dependencies>
     <!-- ... -->
     <dependency>
-      <groupId>com.rapportive</groupId>
+      <groupId>org.clojars.brenden</groupId>
       <artifactId>storm-amqp-spout</artifactId>
-      <version>0.1.1</version>
+      <version>0.2.6-SNAPSHOT</version>
     </dependency>
     <!-- ... -->
   </dependencies>

@@ -2,6 +2,7 @@ package com.rapportive.storm.spout;
 
 import java.io.IOException;
 import java.util.List;
+import java.net.Socket;
 import java.util.Map;
 
 import backtype.storm.tuple.Fields;
@@ -15,6 +16,7 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.QueueingConsumer;
 import com.rabbitmq.client.ShutdownSignalException;
+import com.rabbitmq.client.ConsumerCancelledException;
 
 import com.rapportive.storm.amqp.QueueDeclaration;
 import backtype.storm.spout.Scheme;
@@ -97,7 +99,8 @@ public class AMQPSpout implements IRichSpout {
     /**
      * Name of the stream where malformed deserialized messages are sent for
      * special handling. Generally with a {@link Scheme} implementation returns
-     * null or a zero-length tuple
+     * null or a zero-length tuple.  `enableErrorStream` must be true at
+     * construction.
      */
     public static String ERROR_STREAM_NAME = "error-stream";
 
@@ -107,6 +110,8 @@ public class AMQPSpout implements IRichSpout {
     private final String amqpPassword;
     private final String amqpVhost;
     private final boolean requeueOnFail;
+    private final boolean enableErrorStream;
+    private final boolean autoAck;
 
     private final QueueDeclaration queueDeclaration;
 
@@ -130,7 +135,7 @@ public class AMQPSpout implements IRichSpout {
      * will declare a queue according to the specified
      * <tt>queueDeclaration</tt>, subscribe to the queue, and start consuming
      * messages.  It will use the provided <tt>scheme</tt> to deserialise each
-     * AMQP message into a Storm tuple. Note that failed messages will not be 
+     * AMQP message into a Storm tuple. Note that failed messages will not be
      * requeued.
      *
      * @param host  hostname of the AMQP broker node
@@ -142,8 +147,9 @@ public class AMQPSpout implements IRichSpout {
      * @param scheme  {@link backtype.storm.spout.Scheme} used to deserialise
      *          each AMQP message into a Storm tuple
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
-        this(host, port, username, password, vhost, queueDeclaration, scheme, false);
+    public AMQPSpout(String host, int port, String username, String password,
+            String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
+        this(host, port, username, password, vhost, queueDeclaration, scheme, false, true, false);
     }
 
     /**
@@ -162,9 +168,12 @@ public class AMQPSpout implements IRichSpout {
      * @param queueDeclaration  declaration of the queue / exchange bindings
      * @param scheme  {@link backtype.storm.spout.Scheme} used to deserialise
      *          each AMQP message into a Storm tuple
-     * @param requeueOnFail  whether messages should be requeued on failure 
+     * @param requeueOnFail  whether messages should be requeued on failure
+     * @param enableErrorStream  emit error stream
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail) {
+    public AMQPSpout(String host, int port, String username, String password,
+            String vhost, QueueDeclaration queueDeclaration, Scheme scheme,
+            boolean requeueOnFail, boolean enableErrorStream, boolean autoAck) {
         this.amqpHost = host;
         this.amqpPort = port;
         this.amqpUsername = username;
@@ -172,7 +181,9 @@ public class AMQPSpout implements IRichSpout {
         this.amqpVhost = vhost;
         this.queueDeclaration = queueDeclaration;
         this.requeueOnFail = requeueOnFail;
-        
+        this.enableErrorStream = enableErrorStream;
+        this.autoAck = autoAck;
+
         this.serialisationScheme = scheme;
     }
 
@@ -246,10 +257,10 @@ public class AMQPSpout implements IRichSpout {
      * Tells the AMQP broker to drop (Basic.Reject) the message.
      *
      * requeueOnFail constructor parameter determines whether the message will be requeued.
-     * 
+     *
      * <p><strong>N.B.</strong> There's a potential for infinite
      * redelivery in the event of non-transient failures (e.g. malformed
-     * messages). 
+     * messages).
      *
      */
     @Override
@@ -258,7 +269,13 @@ public class AMQPSpout implements IRichSpout {
             final long deliveryTag = (Long) msgId;
             if (amqpChannel != null) {
                 try {
-                    amqpChannel.basicReject(deliveryTag, requeueOnFail);
+                    if (amqpChannel.isOpen()) {
+                        if (!this.autoAck) {
+                            amqpChannel.basicReject(deliveryTag, requeueOnFail);
+                        }
+                    } else {
+                        reconnect();
+                    }
                 } catch (IOException e) {
                     log.warn("Failed to reject delivery-tag " + deliveryTag, e);
                 }
@@ -300,6 +317,10 @@ public class AMQPSpout implements IRichSpout {
                 log.warn("AMQP connection dropped, will attempt to reconnect...");
                 Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
                 reconnect();
+            } catch (ConsumerCancelledException e) {
+                log.warn("AMQP consumer cancelled, will attempt to reconnect...");
+                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+                reconnect();
             } catch (InterruptedException e) {
                 // interrupted while waiting for message, big deal
             }
@@ -327,6 +348,9 @@ public class AMQPSpout implements IRichSpout {
             setupAMQP();
         } catch (IOException e) {
             log.error("AMQP setup failed", e);
+            log.warn("AMQP setup failed, will attempt to reconnect...");
+            Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+            reconnect();
         }
     }
 
@@ -339,15 +363,26 @@ public class AMQPSpout implements IRichSpout {
      */
     private void handleMalformedDelivery(long deliveryTag, byte[] message) {
         log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
-        ack(deliveryTag);
-        collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
+        if (!this.autoAck) {
+            ack(deliveryTag);
+        }
+        if (enableErrorStream) {
+            collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
+        }
     }
 
 
     private void setupAMQP() throws IOException {
         final int prefetchCount = this.prefetchCount;
 
-        final ConnectionFactory connectionFactory = new ConnectionFactory();
+        final ConnectionFactory connectionFactory = new ConnectionFactory() {
+            public void configureSocket(Socket socket)
+                throws IOException {
+                socket.setTcpNoDelay(false);
+                socket.setReceiveBufferSize(20*1024);
+                socket.setSendBufferSize(20*1024);
+            }
+        };
 
         connectionFactory.setHost(amqpHost);
         connectionFactory.setPort(amqpPort);
@@ -366,7 +401,8 @@ public class AMQPSpout implements IRichSpout {
         log.info("Consuming queue " + queueName);
 
         this.amqpConsumer = new QueueingConsumer(amqpChannel);
-        this.amqpConsumerTag = amqpChannel.basicConsume(queueName, false /* no auto-ack */, amqpConsumer);
+        assert this.amqpConsumer != null;
+        this.amqpConsumerTag = amqpChannel.basicConsume(queueName, this.autoAck, amqpConsumer);
     }
 
 
@@ -390,7 +426,9 @@ public class AMQPSpout implements IRichSpout {
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declare(serialisationScheme.getOutputFields());
-        declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+        if (enableErrorStream) {
+            declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+        }
     }
 
     @Override
