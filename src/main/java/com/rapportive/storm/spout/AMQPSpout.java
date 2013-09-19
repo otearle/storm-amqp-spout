@@ -346,7 +346,6 @@ public class AMQPSpout implements IRichSpout {
             this.collector = collector;
 
             setupAMQP();
-            activate();
         } catch (IOException e) {
             log.error("AMQP setup failed", e);
             log.warn("AMQP setup failed, will attempt to reconnect...");
