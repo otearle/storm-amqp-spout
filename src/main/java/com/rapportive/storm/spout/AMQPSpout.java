@@ -64,7 +64,7 @@ import backtype.storm.utils.Utils;
 public class AMQPSpout implements IRichSpout {
     private static final long serialVersionUID = 11258942292629264L;
 
-    private static final Logger log = Logger.getLogger(AMQPSpout.class);
+    protected static final Logger log = Logger.getLogger(AMQPSpout.class);
 
     /**
      * Storm config key to set the AMQP basic.qos prefetch-count parameter.
@@ -117,13 +117,13 @@ public class AMQPSpout implements IRichSpout {
 
     private final Scheme serialisationScheme;
 
-    private transient boolean spoutActive = true;
+    protected transient boolean spoutActive = true;
     private transient Connection amqpConnection;
     private transient Channel amqpChannel;
-    private transient QueueingConsumer amqpConsumer;
+    protected transient QueueingConsumer amqpConsumer;
     private transient String amqpConsumerTag;
 
-    private SpoutOutputCollector collector;
+    protected SpoutOutputCollector collector;
 
     private int prefetchCount;
 
