@@ -361,7 +361,7 @@ public class AMQPSpout implements IRichSpout {
      * @param deliveryTag AMQP delivery tag
      * @param message bytes of the bad message
      */
-    private void handleMalformedDelivery(long deliveryTag, byte[] message) {
+    protected void handleMalformedDelivery(long deliveryTag, byte[] message) {
         log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
         if (!this.autoAck) {
             ack(deliveryTag);
@@ -406,7 +406,7 @@ public class AMQPSpout implements IRichSpout {
     }
 
 
-    private void reconnect() {
+    protected void reconnect() {
         log.info("Reconnecting to AMQP broker...");
         try {
             setupAMQP();
