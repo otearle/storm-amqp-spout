@@ -1,31 +1,22 @@
 package com.rapportive.storm.spout;
 
-import java.io.IOException;
-import java.util.List;
-import java.net.Socket;
-import java.util.Map;
-
-import backtype.storm.tuple.Fields;
-import backtype.storm.tuple.Values;
-import org.apache.log4j.Logger;
-
-import com.rabbitmq.client.AMQP.Queue;
-
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.QueueingConsumer;
-import com.rabbitmq.client.ShutdownSignalException;
-import com.rabbitmq.client.ConsumerCancelledException;
-
-import com.rapportive.storm.amqp.QueueDeclaration;
 import backtype.storm.spout.Scheme;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.IRichSpout;
 import backtype.storm.topology.OutputFieldsDeclarer;
-
+import backtype.storm.tuple.Fields;
+import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
+import com.rabbitmq.client.AMQP.Queue;
+import com.rabbitmq.client.*;
+import com.rapportive.storm.amqp.QueueDeclaration;
+import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Spout to feed messages into Storm from an AMQP queue.  Each message routed
@@ -110,12 +101,12 @@ public class AMQPSpout implements IRichSpout {
     private final String amqpPassword;
     private final String amqpVhost;
     private final boolean requeueOnFail;
-    private final boolean enableErrorStream;
+    protected final boolean enableErrorStream;
     private final boolean autoAck;
 
     private final QueueDeclaration queueDeclaration;
 
-    private final Scheme serialisationScheme;
+    protected final Scheme serialisationScheme;
 
     protected transient boolean spoutActive = true;
     private transient Connection amqpConnection;
