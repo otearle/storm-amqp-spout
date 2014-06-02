@@ -1,31 +1,27 @@
 package com.rapportive.storm.spout;
 
-import java.io.IOException;
-import java.util.List;
-import java.net.Socket;
-import java.util.Map;
 
-import backtype.storm.tuple.Fields;
-import backtype.storm.tuple.Values;
-import org.apache.log4j.Logger;
-
-import com.rabbitmq.client.AMQP.Queue;
-
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.QueueingConsumer;
-import com.rabbitmq.client.ShutdownSignalException;
-import com.rabbitmq.client.ConsumerCancelledException;
-
-import com.rapportive.storm.amqp.QueueDeclaration;
 import backtype.storm.spout.Scheme;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.IRichSpout;
 import backtype.storm.topology.OutputFieldsDeclarer;
-
+import backtype.storm.tuple.Fields;
+import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
+import com.rabbitmq.client.AMQP.Queue;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.ConsumerCancelledException;
+import com.rabbitmq.client.QueueingConsumer;
+import com.rabbitmq.client.ShutdownSignalException;
+import com.rapportive.storm.amqp.QueueDeclaration;
+import java.io.IOException;
+import java.net.Socket;
+import java.util.List;
+import java.util.Map;
+import org.apache.log4j.Logger;
 
 /**
  * Spout to feed messages into Storm from an AMQP queue.  Each message routed
@@ -361,7 +357,7 @@ public class AMQPSpout implements IRichSpout {
      * @param deliveryTag AMQP delivery tag
      * @param message bytes of the bad message
      */
-    private void handleMalformedDelivery(long deliveryTag, byte[] message) {
+    protected void handleMalformedDelivery(long deliveryTag, byte[] message) {
         log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
         if (!this.autoAck) {
             ack(deliveryTag);
@@ -406,7 +402,7 @@ public class AMQPSpout implements IRichSpout {
     }
 
 
-    private void reconnect() {
+    protected void reconnect() {
         log.info("Reconnecting to AMQP broker...");
         try {
             setupAMQP();
