@@ -9,7 +9,7 @@ import com.rabbitmq.client.Channel;
 /**
  * Declares an exclusive, server-named queue and binds it to an existing
  * exchange.  This is probably the easiest way to start prototyping with an
- * {@link com.rapportive.storm.spout.AMQPSpout}: if your app already publishes
+ * {@link com.rapportive.storm.spout.BaseAMQPSpout}: if your app already publishes
  * to an exchange, you can just point this at the exchange and start consuming
  * messages.
  *
