@@ -1,12 +1,11 @@
 package com.rapportive.storm.amqp;
 
+import com.rabbitmq.client.AMQP.Queue;
+import com.rabbitmq.client.Channel;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.rabbitmq.client.AMQP.Queue;
-
-import com.rabbitmq.client.Channel;
 
 /**
  * Declares a named, durable queue and binds it to an existing exchange.  This
@@ -31,7 +30,7 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	private final String queueName;
 	private final String exchange;
 	private final String routingKey;
-	private long queue_ttl, queue_expires, queue_max_length;
+	private long queue_ttl, queue_expires, queue_max_length = -1;
 
 	/**
 	 * Create a declaration of a named, durable, non-exclusive queue bound to
@@ -41,6 +40,14 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	 * @param exchange  exchange to bind the queue to.
 	 * @param routingKey  routing key for the exchange binding.  Use "#" to
 	 *                    receive all messages published to the exchange.
+     * @param queue_ttl time (in milliseconds) for each message on the queue to
+     *                  be considered "alive" http://www.rabbitmq.com/ttl.html
+     * @param queue_expires time (in milliseconds) for the queue to stick around
+     *                      without a consumer. http://www.rabbitmq.com/ttl.html
+     * @param queue_max_length maximum number of messages to allow on the queue.
+     *                         This includes acked and unacked messages.  Further
+     *                         messages delivered to the queue will be dropped or
+     *                         sent to the dead-letter queue
 	 */
 	public SharedQueueWithBinding(String queueName, String exchange, String
 			routingKey, long queue_ttl, long queue_expires, long
@@ -52,6 +59,21 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 		this.queue_expires = queue_expires;
 		this.queue_max_length = queue_max_length;
 	}
+
+    /**
+     * Create a declaration of a named, durable, non-exclusive queue bound to
+     * the specified exchange.
+     *
+     * @param queueName  name of the queue to be declared.
+     * @param exchange  exchange to bind the queue to.
+     * @param routingKey  routing key for the exchange binding.  Use "#" to
+     *                    receive all messages published to the exchange.
+     */
+    public SharedQueueWithBinding(String queueName, String exchange, String routingKey) {
+        this.queueName = queueName;
+        this.exchange = exchange;
+        this.routingKey = routingKey;
+    }
 
 	/**
 	 * Verifies the exchange exists, creates the named queue if it does not
@@ -65,9 +87,9 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	@Override
 	public Queue.DeclareOk declare(Channel channel) throws IOException {
 		Map<String, Object> args = new HashMap<String, Object>();
-		args.put("x-message-ttl", queue_ttl);
-		args.put("x-expires",     queue_expires);
-		args.put("x-max-length",  queue_max_length);
+        if (queue_ttl > -1) args.put("x-message-ttl", queue_ttl);
+		if (queue_expires > -1) args.put("x-expires",     queue_expires);
+		if (queue_max_length > -1) args.put("x-max-length",  queue_max_length);
 		channel.exchangeDeclarePassive(exchange);
 
 		final Queue.DeclareOk queue = channel.queueDeclare(
