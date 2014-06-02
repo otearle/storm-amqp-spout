@@ -11,11 +11,12 @@ import com.rabbitmq.client.ShutdownSignalException;
 import com.rapportive.storm.amqp.QueueDeclaration;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by alt on 6/2/14.
  */
-public class AMQPSpout extends BaseAMQPSpout{
+public class AMQPHeaderSpout extends BaseAMQPSpout{
     /**
      * Create a new AMQP spout.  When
      * {@link #open(Map, TopologyContext, SpoutOutputCollector)} is called, it
@@ -33,7 +34,7 @@ public class AMQPSpout extends BaseAMQPSpout{
      * @param queueDeclaration declaration of the queue / exchange bindings
      * @param scheme           {@link backtype.storm.spout.Scheme} used to deserialise
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
+    public AMQPHeaderSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme) {
         super(host, port, username, password, vhost, queueDeclaration, scheme);
     }
 
@@ -57,21 +58,21 @@ public class AMQPSpout extends BaseAMQPSpout{
      * @param enableErrorStream emit error stream
      * @param autoAck
      */
-    public AMQPSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail, boolean enableErrorStream, boolean autoAck) {
+    public AMQPHeaderSpout(String host, int port, String username, String password, String vhost, QueueDeclaration queueDeclaration, Scheme scheme, boolean requeueOnFail, boolean enableErrorStream, boolean autoAck) {
         super(host, port, username, password, vhost, queueDeclaration, scheme, requeueOnFail, enableErrorStream, autoAck);
     }
 
-    /**
-     * Emits the next message from the queue as a tuple.
-     *
-     * Serialization schemes returning null will immediately ack
-     * and then emit unanchored on the {@link #ERROR_STREAM_NAME} stream for
-     * further handling by the consumer.
-     *
-     * <p>If no message is ready to emit, this will wait a short time
-     * ({@link #WAIT_FOR_NEXT_MESSAGE}) for one to arrive on the queue,
-     * to avoid a tight loop in the spout worker.</p>
-     */
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
+        List fieldsList = serialisationScheme.getOutputFields().toList();
+        fieldsList.add("headers");
+        Fields realFields = new Fields(fieldsList);
+        outputFieldsDeclarer.declare(realFields);
+        if (enableErrorStream) {
+            outputFieldsDeclarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+        }
+    }
+
     @Override
     public void nextTuple() {
         if (spoutActive && amqpConsumer != null) {
@@ -79,14 +80,16 @@ public class AMQPSpout extends BaseAMQPSpout{
                 final QueueingConsumer.Delivery delivery = amqpConsumer.nextDelivery(WAIT_FOR_NEXT_MESSAGE);
                 if (delivery == null) return;
                 final long deliveryTag = delivery.getEnvelope().getDeliveryTag();
+                final Map<String, Object> headers = delivery.getProperties().getHeaders();
                 final byte[] message = delivery.getBody();
 
                 List<Object> deserializedMessage = serialisationScheme.deserialize(message);
 
                 if (deserializedMessage != null && deserializedMessage.size() > 0) {
+                    deserializedMessage.add(headers);
                     collector.emit(deserializedMessage, deliveryTag);
                 } else {
-                    handleMalformedDelivery(deliveryTag, message);
+                    this.handleMalformedDelivery(deliveryTag, delivery);
                 }
             } catch (ShutdownSignalException e) {
                 log.warn("AMQP connection dropped, will attempt to reconnect...");
@@ -106,30 +109,16 @@ public class AMQPSpout extends BaseAMQPSpout{
      * Acks the bad message to avoid retry loops. Also emits the bad message
      * unreliably on the {@link #ERROR_STREAM_NAME} stream for consumer handling.
      * @param deliveryTag AMQP delivery tag
-     * @param message bytes of the bad message
+     * @param full amqp message including headers and properties
      */
-    protected void handleMalformedDelivery(long deliveryTag, byte[] message) {
+    protected void handleMalformedDelivery(long deliveryTag, QueueingConsumer.Delivery amqpMessage) {
         log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
         if (!this.autoAck) {
             ack(deliveryTag);
         }
         if (enableErrorStream) {
-            collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
+            collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, amqpMessage.getBody()));
         }
     }
 
-    /**
-     * Declares the output fields of this spout according to the provided
-     * {@link backtype.storm.spout.Scheme}.
-     *
-     * Additionally declares an error stream (see {@link #ERROR_STREAM_NAME} for handling
-     * malformed or empty messages to avoid infinite retry loops
-     */
-    @Override
-    public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(serialisationScheme.getOutputFields());
-        if (enableErrorStream) {
-            declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
-        }
-    }
 }
