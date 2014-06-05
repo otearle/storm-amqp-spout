@@ -86,20 +86,25 @@ public class SharedQueueWithBinding implements QueueDeclaration {
 	 */
 	@Override
 	public Queue.DeclareOk declare(Channel channel) throws IOException {
-		Map<String, Object> args = new HashMap<String, Object>();
+        final Queue.DeclareOk queue;
+        Queue.DeclareOk queue1;
+        Map<String, Object> args = new HashMap<String, Object>();
         if (queue_ttl > -1) args.put("x-message-ttl", queue_ttl);
 		if (queue_expires > -1) args.put("x-expires",     queue_expires);
 		if (queue_max_length > -1) args.put("x-max-length",  queue_max_length);
-		channel.exchangeDeclarePassive(exchange);
-
-		final Queue.DeclareOk queue = channel.queueDeclare(
-				queueName,
-				/* durable */ true,
-				/* non-exclusive */ false,
-				/* non-auto-delete */ false,
-				args);
-
-		channel.queueBind(queue.getQueue(), exchange, routingKey);
+        try {
+            channel.exchangeDeclarePassive(exchange);
+        } catch (IOException e) {
+            channel.exchangeDeclare(exchange, "direct", true);
+        }
+        try {
+           queue1 = channel.queueDeclarePassive(queueName);
+        } catch (IOException e) {
+            // The args for queueDeclare are: name, durable, exclusive, autoDelete, arguments
+            queue1 = channel.queueDeclare(queueName,true,false,false,args);
+        }
+        queue = queue1;
+        channel.queueBind(queue.getQueue(), exchange, routingKey);
 
 		return queue;
 	}
