@@ -1,13 +1,9 @@
 package com.rapportive.storm.spout;
 
-
 import backtype.storm.spout.Scheme;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
-import backtype.storm.topology.IRichSpout;
-import backtype.storm.topology.OutputFieldsDeclarer;
-import backtype.storm.tuple.Fields;
-import backtype.storm.tuple.Values;
+import backtype.storm.topology.base.BaseRichSpout;
 import backtype.storm.utils.Utils;
 import com.rabbitmq.client.AMQP.Queue;
 import com.rabbitmq.client.*;
@@ -16,7 +12,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -53,7 +48,7 @@ import java.util.Map;
  *
  * @author Sam Stokes (sam@rapportive.com)
  */
-public class BaseAMQPSpout implements IRichSpout {
+public abstract class BaseAMQPSpout extends BaseRichSpout {
     private static final long serialVersionUID = 11258942292629264L;
 
     protected static final Logger log = Logger.getLogger(BaseAMQPSpout.class);
@@ -96,16 +91,16 @@ public class BaseAMQPSpout implements IRichSpout {
      */
     public static String ERROR_STREAM_NAME = "error-stream";
 
-    private final String amqpHost;
-    private final int amqpPort;
-    private final String amqpUsername;
-    private final String amqpPassword;
-    private final String amqpVhost;
-    private final boolean requeueOnFail;
+    protected final String amqpHost;
+    protected final int amqpPort;
+    protected final String amqpUsername;
+    protected final String amqpPassword;
+    protected final String amqpVhost;
+    protected final boolean requeueOnFail;
     protected final boolean enableErrorStream;
-    private final boolean autoAck;
+    protected final boolean autoAck;
 
-    private final QueueDeclaration queueDeclaration;
+    protected final QueueDeclaration queueDeclaration;
 
     protected final Scheme serialisationScheme;
 
@@ -244,7 +239,6 @@ public class BaseAMQPSpout implements IRichSpout {
         spoutActive = false;
     }
 
-
     /**
      * Tells the AMQP broker to drop (Basic.Reject) the message.
      *
@@ -276,93 +270,6 @@ public class BaseAMQPSpout implements IRichSpout {
             log.warn(String.format("don't know how to reject(%s: %s)", msgId.getClass().getName(), msgId));
         }
     }
-
-
-    /**
-     * Emits the next message from the queue as a tuple.
-     *
-     * Serialization schemes returning null will immediately ack
-     * and then emit unanchored on the {@link #ERROR_STREAM_NAME} stream for
-     * further handling by the consumer.
-     *
-     * <p>If no message is ready to emit, this will wait a short time
-     * ({@link #WAIT_FOR_NEXT_MESSAGE}) for one to arrive on the queue,
-     * to avoid a tight loop in the spout worker.</p>
-     */
-    @Override
-    public void nextTuple() {
-        if (spoutActive && amqpConsumer != null) {
-            try {
-                final QueueingConsumer.Delivery delivery = amqpConsumer.nextDelivery(WAIT_FOR_NEXT_MESSAGE);
-                if (delivery == null) return;
-                final long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-                final byte[] message = delivery.getBody();
-
-                List<Object> deserializedMessage = serialisationScheme.deserialize(message);
-
-                if (deserializedMessage != null && deserializedMessage.size() > 0) {
-                    collector.emit(deserializedMessage, deliveryTag);
-                } else {
-                    handleMalformedDelivery(deliveryTag, message);
-                }
-            } catch (ShutdownSignalException e) {
-                log.warn("AMQP connection dropped, will attempt to reconnect...");
-                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
-                reconnect();
-            } catch (ConsumerCancelledException e) {
-                log.warn("AMQP consumer cancelled, will attempt to reconnect...");
-                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
-                reconnect();
-            } catch (InterruptedException e) {
-                // interrupted while waiting for message, big deal
-            }
-        }
-    }
-
-    /**
-     * Connects to the AMQP broker, declares the queue and subscribes to
-     * incoming messages.
-     */
-    @Override
-    public void open(@SuppressWarnings("rawtypes") Map config, TopologyContext context, SpoutOutputCollector collector) {
-        Long prefetchCount = (Long) config.get(CONFIG_PREFETCH_COUNT);
-        if (prefetchCount == null) {
-            log.info("Using default prefetch-count");
-            prefetchCount = DEFAULT_PREFETCH_COUNT;
-        } else if (prefetchCount < 1) {
-            throw new IllegalArgumentException(CONFIG_PREFETCH_COUNT + " must be at least 1");
-        }
-        this.prefetchCount = prefetchCount.intValue();
-
-        try {
-            this.collector = collector;
-
-            setupAMQP();
-        } catch (IOException e) {
-            log.error("AMQP setup failed", e);
-            log.warn("AMQP setup failed, will attempt to reconnect...");
-            Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
-            reconnect();
-        }
-    }
-
-
-    /**
-     * Acks the bad message to avoid retry loops. Also emits the bad message
-     * unreliably on the {@link #ERROR_STREAM_NAME} stream for consumer handling.
-     * @param deliveryTag AMQP delivery tag
-     * @param message bytes of the bad message
-     */
-    protected void handleMalformedDelivery(long deliveryTag, byte[] message) {
-        log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
-        if (!this.autoAck) {
-            ack(deliveryTag);
-        }
-        if (enableErrorStream) {
-            collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, message));
-        }
-    }
-
 
     private void setupAMQP() throws IOException {
         final int prefetchCount = this.prefetchCount;
@@ -397,7 +304,6 @@ public class BaseAMQPSpout implements IRichSpout {
         this.amqpConsumerTag = amqpChannel.basicConsume(queueName, this.autoAck, amqpConsumer);
     }
 
-
     protected void reconnect() {
         log.info("Reconnecting to AMQP broker...");
         try {
@@ -407,19 +313,30 @@ public class BaseAMQPSpout implements IRichSpout {
         }
     }
 
-
     /**
-     * Declares the output fields of this spout according to the provided
-     * {@link backtype.storm.spout.Scheme}.
-     *
-     * Additionally declares an error stream (see {@link #ERROR_STREAM_NAME} for handling
-     * malformed or empty messages to avoid infinite retry loops
+     * Connects to the AMQP broker, declares the queue and subscribes to
+     * incoming messages.
      */
     @Override
-    public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(serialisationScheme.getOutputFields());
-        if (enableErrorStream) {
-            declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
+    public void open(@SuppressWarnings("rawtypes") Map config, TopologyContext context, SpoutOutputCollector collector) {
+        Long prefetchCount = (Long) config.get(CONFIG_PREFETCH_COUNT);
+        if (prefetchCount == null) {
+            log.info("Using default prefetch-count");
+            prefetchCount = DEFAULT_PREFETCH_COUNT;
+        } else if (prefetchCount < 1) {
+            throw new IllegalArgumentException(CONFIG_PREFETCH_COUNT + " must be at least 1");
+        }
+        this.prefetchCount = prefetchCount.intValue();
+
+        try {
+            this.collector = collector;
+
+            setupAMQP();
+        } catch (IOException e) {
+            log.error("AMQP setup failed", e);
+            log.warn("AMQP setup failed, will attempt to reconnect...");
+            Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+            reconnect();
         }
     }
 
