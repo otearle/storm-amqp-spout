@@ -106,7 +106,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
 
     protected transient boolean spoutActive = true;
     private transient Connection amqpConnection;
-    private transient Channel amqpChannel;
+    protected transient Channel amqpChannel;
     protected transient QueueingConsumer amqpConsumer;
     private transient String amqpConsumerTag;
 
@@ -182,7 +182,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
     public void ack(Object msgId) {
         if (msgId instanceof Long) {
             final long deliveryTag = (Long) msgId;
-            if (amqpChannel != null) {
+        if (amqpChannel != null) {
                 try {
                     amqpChannel.basicAck(deliveryTag, false /* not multiple */);
                 } catch (IOException e) {
@@ -228,6 +228,8 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
      */
     public void activate() {
         log.info("Unpausing spout");
+        if (amqpChannel == null) {reconnect();}
+        if (!this.amqpChannel.isOpen()) {reconnect();}
         spoutActive = true;
     }
 
@@ -297,7 +299,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
 
         final Queue.DeclareOk queue = queueDeclaration.declare(amqpChannel);
         final String queueName = queue.getQueue();
-        log.info("Consuming queue " + queueName);
+        log.info("Consuming queue " + queueName + "with autoAck=" + this.autoAck);
 
         this.amqpConsumer = new QueueingConsumer(amqpChannel);
         assert this.amqpConsumer != null;

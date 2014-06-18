@@ -110,7 +110,15 @@ public class SharedQueueWithBinding implements QueueDeclaration {
             queue1 = channel.queueDeclare(queueName,true,false,false,args);
         }
         queue = queue1;
-        channel.queueBind(queue.getQueue(), exchange, routingKey);
+        // is this a comma separated list of routing keys?
+        String[] routingKeys = routingKey.split(",");
+        if (routingKeys.length > 1){
+            for (String eachKey: routingKeys) {
+                channel.queueBind(queue.getQueue(), exchange, eachKey.replace(" ", ""));
+            }
+        } else {
+            channel.queueBind(queue.getQueue(), exchange, routingKey);
+        }
 
         return queue;
     }
