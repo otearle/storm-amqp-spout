@@ -3,9 +3,10 @@
   <groupId>org.clojars.storm-amqp</groupId>
   <artifactId>storm-amqp-spout</artifactId>
   <versioning>
+    <release>0.2.7-LINDEN</release>
     <versions>
-      <version>0.2.7-SNAPSHOT</version>
+      <version>0.2.7-LINDEN</version>
     </versions>
-    <lastUpdated>20140618175746</lastUpdated>
+    <lastUpdated>20140618181017</lastUpdated>
   </versioning>
 </metadata>
