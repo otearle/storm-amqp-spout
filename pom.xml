@@ -19,6 +19,11 @@
             <email>brenden@diddyinc.com</email>
 			<url>http://diddyinc.com/</url>
         </developer>
+        <developer>
+            <name>Alex Lovell-Troy</name>
+            <email>alex@lovelltroy.org</email>
+            <url>http://lovelltroy.org/</url>
+        </developer>
     </developers>
 
     <licenses>

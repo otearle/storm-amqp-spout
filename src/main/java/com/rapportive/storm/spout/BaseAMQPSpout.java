@@ -4,6 +4,7 @@ import backtype.storm.spout.Scheme;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.base.BaseRichSpout;
+import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
 import com.rabbitmq.client.AMQP.Queue;
 import com.rabbitmq.client.*;
@@ -12,7 +13,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Spout to feed messages into Storm from an AMQP queue.  Each message routed
@@ -113,6 +114,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
     protected SpoutOutputCollector collector;
 
     private int prefetchCount;
+    protected TreeMap<UUID,Long> messageIdMap;
 
 
 
@@ -176,26 +178,98 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
 
 
     /**
-     * Acks the message with the AMQP broker.
+     * Emits the next message from the queue as a tuple.
+     *
+     * Serialization schemes returning null will immediately ack
+     * and then emit unanchored on the {@link #ERROR_STREAM_NAME} stream for
+     * further handling by the consumer.
+     *
+     * <p>If no message is ready to emit, this will wait a short time
+     * ({@link #WAIT_FOR_NEXT_MESSAGE}) for one to arrive on the queue,
+     * to avoid a tight loop in the spout worker.</p>
      */
     @Override
-    public void ack(Object msgId) {
-        if (msgId instanceof Long) {
-            final long deliveryTag = (Long) msgId;
-        if (amqpChannel != null) {
-                try {
-                    amqpChannel.basicAck(deliveryTag, false /* not multiple */);
-                } catch (IOException e) {
-                    log.warn("Failed to ack delivery-tag " + deliveryTag, e);
-                } catch (ShutdownSignalException e) {
-                    log.warn("AMQP connection failed. Failed to ack delivery-tag " + deliveryTag, e);
-                }
+    public void nextTuple() {
+        if (spoutActive && amqpConsumer != null) {
+            try {
+                final QueueingConsumer.Delivery delivery = amqpConsumer.nextDelivery(WAIT_FOR_NEXT_MESSAGE);
+                if (delivery == null) return;
+                // add the deliveryTag to our list of tuples we care about
+                UUID uniqueId = UUID.randomUUID();
+                messageIdMap.put(uniqueId, (Long) delivery.getEnvelope().getDeliveryTag());
+                handleOneMessage(delivery, uniqueId);
+            } catch (ShutdownSignalException e) {
+                log.warn("AMQP connection dropped, will attempt to reconnect...");
+                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+                this.reconnect();
+            } catch (ConsumerCancelledException e) {
+                log.warn("AMQP consumer cancelled, will attempt to reconnect...");
+                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
+                this.reconnect();
+            } catch (InterruptedException e) {
+                // interrupted while waiting for message, big deal
             }
-        } else {
-            log.warn(String.format("don't know how to ack(%s: %s)", msgId.getClass().getName(), msgId));
         }
     }
 
+    /**
+     * Deals with one non-null message at a time
+     * In the basic spout, this serializes and emits a message.
+     * To change the way messages are handled, override this method
+     *
+     * @param delivery The thing delivered by amqp which has a body, properties, and a deliveryTag
+     * @param uniqueId A unique reference that storm can use to send notifications back up the topology  Probably an instance of UUID
+     */
+    public void handleOneMessage(QueueingConsumer.Delivery delivery, Object uniqueId) {
+        final byte[] message = delivery.getBody();
+        List<Object> deserializedMessage = serialisationScheme.deserialize(message);
+        if (deserializedMessage != null && deserializedMessage.size() > 0) {
+            collector.emit(deserializedMessage, uniqueId);
+        } else {
+            handleMalformedDelivery(delivery, uniqueId);
+        }
+    }
+
+
+    /**
+     * Acks the message with the AMQP broker and includes protection for
+     * when the msgID is no longer valid on our existing channel
+     * @param msgId AMQP deliveryTag
+     */
+    @Override
+    public void ack(Object msgId) {
+        // This only works if we still have the same AMQP connection
+        // So we have to go through this nonsense to prevent the connection dropping
+        if (msgId instanceof UUID) {
+            final UUID msgUUID = (UUID) msgId;
+            Object deliveryTagObj = messageIdMap.get(msgUUID);
+            if (deliveryTagObj instanceof Long) {
+                final Long deliveryTag = (Long) deliveryTagObj;
+                if (amqpChannel != null) {
+                    try {
+                        if (!autoAck && amqpChannel.isOpen()) {
+                            amqpChannel.basicAck(deliveryTag, false /* not multiple */);
+                        }
+                        messageIdMap.remove(msgUUID);
+                    } catch (IOException e) {
+                        log.warn("Failed to ack delivery-tag " + deliveryTag, e);
+                    } catch (ShutdownSignalException e) {
+                        log.warn("AMQP connection failed. Failed to ack delivery-tag " + deliveryTag, e);
+                    }
+                } else log.warn(String.format("Cannot reject message %s on a closed channel.",  msgUUID.toString()));
+            } else log.warn(String.format("Cannot reject unknown message %s.  This channel knows about %d messages.", msgUUID.toString(), messageIdMap.size()));
+        }
+    }
+
+    public void handleMalformedDelivery(QueueingConsumer.Delivery delivery, Object msgId){
+        log.debug(String.format("Rejecting Malformed Message from AMQP"));
+        if (!this.autoAck) {
+            ack(msgId);
+        }
+        if (enableErrorStream) {
+            collector.emit(ERROR_STREAM_NAME, new Values(delivery.getEnvelope().getDeliveryTag(), delivery));
+        }
+    }
 
     /**
      * Cancels the queue subscription, and disconnects from the AMQP broker.
@@ -253,23 +327,26 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
      */
     @Override
     public void fail(Object msgId) {
-        if (msgId instanceof Long) {
-            final long deliveryTag = (Long) msgId;
-            if (amqpChannel != null) {
-                try {
-                    if (amqpChannel.isOpen()) {
-                        if (!this.autoAck) {
+        // This only works if we still have the same AMQP connection
+        // So we have to go through this nonsense to prevent the connection dropping
+        if (msgId instanceof UUID) {
+            final UUID msgUUID = (UUID) msgId;
+            Object deliveryTagObj = messageIdMap.get(msgUUID);
+            if (deliveryTagObj instanceof Long) {
+                final Long deliveryTag = (Long) deliveryTagObj;
+                if (amqpChannel != null) {
+                    try {
+                        if (!autoAck) {
                             amqpChannel.basicReject(deliveryTag, requeueOnFail);
                         }
-                    } else {
-                        reconnect();
+                        messageIdMap.remove(msgUUID);
+                    } catch (IOException e) {
+                        log.warn("Failed to reject delivery-tag " + deliveryTag, e);
+                    } catch (ShutdownSignalException e) {
+                        log.warn("AMQP connection failed. Failed to reject delivery-tag " + deliveryTag, e);
                     }
-                } catch (IOException e) {
-                    log.warn("Failed to reject delivery-tag " + deliveryTag, e);
-                }
-            }
-        } else {
-            log.warn(String.format("don't know how to reject(%s: %s)", msgId.getClass().getName(), msgId));
+                } else log.warn(String.format("Cannot reject message %s on a closed channel.",  msgUUID.toString()));
+            } else log.warn(String.format("Cannot reject unknown message %s.  This channel knows about %d messages.", msgUUID.toString(), messageIdMap.size()));
         }
     }
 
@@ -309,6 +386,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
     protected void reconnect() {
         log.info("Reconnecting to AMQP broker...");
         try {
+            messageIdMap.clear();
             setupAMQP();
         } catch (IOException e) {
             log.warn("Failed to reconnect to AMQP broker", e);
@@ -332,8 +410,10 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
 
         try {
             this.collector = collector;
-
+            // Set up our map of message ids that we are tracking
+            messageIdMap = new TreeMap<UUID,Long>();
             setupAMQP();
+
         } catch (IOException e) {
             log.error("AMQP setup failed", e);
             log.warn("AMQP setup failed, will attempt to reconnect...");

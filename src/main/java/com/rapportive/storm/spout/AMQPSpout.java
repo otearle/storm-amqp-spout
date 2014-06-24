@@ -10,6 +10,7 @@ import com.rabbitmq.client.QueueingConsumer;
 import com.rabbitmq.client.ShutdownSignalException;
 import com.rapportive.storm.amqp.QueueDeclaration;
 
+import java.io.IOException;
 import java.util.List;
 /**
  * Created by alt on 6/2/14.
@@ -130,4 +131,5 @@ public class AMQPSpout extends BaseAMQPSpout{
             declarer.declareStream(ERROR_STREAM_NAME, new Fields("deliveryTag", "bytes"));
         }
     }
+
 }
