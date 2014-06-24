@@ -74,51 +74,17 @@ public class AMQPHeaderSpout extends BaseAMQPSpout{
     }
 
     @Override
-    public void nextTuple() {
-        if (spoutActive && amqpConsumer != null) {
-            try {
-                final QueueingConsumer.Delivery delivery = amqpConsumer.nextDelivery(WAIT_FOR_NEXT_MESSAGE);
-                if (delivery == null) return;
-                final long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-                final Map<String, Object> headers = delivery.getProperties().getHeaders();
-                final byte[] message = delivery.getBody();
+    public void handleOneMessage(QueueingConsumer.Delivery delivery, Object uniqueId) {
+        final Map<String, Object> headers = delivery.getProperties().getHeaders();
+        final byte[] message = delivery.getBody();
 
-                List<Object> deserializedMessage = serialisationScheme.deserialize(message);
+        List<Object> deserializedMessage = serialisationScheme.deserialize(message);
 
-                if (deserializedMessage != null && deserializedMessage.size() > 0) {
-                    deserializedMessage.add(headers);
-                    collector.emit(deserializedMessage, deliveryTag);
-                } else {
-                    this.handleMalformedDelivery(deliveryTag, delivery);
-                }
-            } catch (ShutdownSignalException e) {
-                log.warn("AMQP connection dropped, will attempt to reconnect...");
-                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
-                this.reconnect();
-            } catch (ConsumerCancelledException e) {
-                log.warn("AMQP consumer cancelled, will attempt to reconnect...");
-                Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
-                this.reconnect();
-            } catch (InterruptedException e) {
-                // interrupted while waiting for message, big deal
-            }
+        if (deserializedMessage != null && deserializedMessage.size() > 0) {
+            deserializedMessage.add(headers);
+            collector.emit(deserializedMessage, uniqueId);
+        } else {
+            this.handleMalformedDelivery(delivery, uniqueId);
         }
     }
-
-    /**
-     * Acks the bad message to avoid retry loops. Also emits the bad message
-     * unreliably on the {@link #ERROR_STREAM_NAME} stream for consumer handling.
-     * @param deliveryTag AMQP delivery tag
-     * @param full amqp message including headers and properties
-     */
-    protected void handleMalformedDelivery(long deliveryTag, QueueingConsumer.Delivery amqpMessage) {
-        log.debug("Malformed deserialized message, null or zero-length. " + deliveryTag);
-        if (!this.autoAck) {
-            ack(deliveryTag);
-        }
-        if (enableErrorStream) {
-            collector.emit(ERROR_STREAM_NAME, new Values(deliveryTag, amqpMessage.getBody()));
-        }
-    }
-
 }
