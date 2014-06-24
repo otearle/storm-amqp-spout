@@ -2,7 +2,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.clojars.storm-amqp</groupId>
     <artifactId>storm-amqp-spout</artifactId>
-    <version>0.2.7-LINDEN</version>
+    <version>0.2.8-LINDEN</version>
 
     <name>Storm AMQP Spout</name>
     <description>AMQP input source for Storm</description>
@@ -57,9 +57,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>storm</groupId>
-            <artifactId>storm</artifactId>
-            <version>0.8.2</version>
+            <groupId>org.apache.storm</groupId>
+            <artifactId>storm-core</artifactId>
+            <version>0.9.1-incubating</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -79,8 +79,8 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>2.3.2</version>
 				<configuration>
-					<source>1.6</source>
-					<target>1.6</target>
+					<source>1.7</source>
+					<target>1.7</target>
 				</configuration>
 			</plugin>
             <plugin>
