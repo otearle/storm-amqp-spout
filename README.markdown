@@ -45,6 +45,18 @@ To give permission to user testuser for anything on the 'myvhost' virtual host, 
 
 	rabbitmqctl set_permissions -p /myvhost testuser ".*" ".*" ".*"
 
+Once this is done, you can create your Spout:
+
+    		SharedQueueWithBinding declaration = new SharedQueueWithBinding("testQueue", "testExchange", "testRoutingKey");
+    		
+    		AMQPSpout amqpSpout = new AMQPSpout("localhost", 5672, "testUser", "testPassword", "myvhost", declaration, new StringScheme("args"), true, false, true);
+
+This will create a durable, auto-acking spout queue. 
+
+Note that the queue, the exchange and the routing key will be created automatically, you don't need to do anything with Rabbit.
+
+Another thing that tripped me up is that you need to publish messages using the routing key, instead of the queue name, otherwise the receiver
+won't pick it up.
 
 ## Usage ##
 
