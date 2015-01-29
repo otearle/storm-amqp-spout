@@ -25,14 +25,15 @@ You'll need to create a user and a vhost on the rabbitMQ server.
 
 Create user:
 
-	rabbitmqctl add_user {username} {password}m
+	rabbitmqctl add_user {username} {password}
+	
 Create vhost:
 
 	rabbitmqctl add_vhost {vhostpath}
 
 Example:
 
-	rabbitmqctl add_vhost test
+	rabbitmqctl add_vhost myvhost
 
 Give privilages to user:
 
@@ -42,7 +43,7 @@ Example:
 
 To give permission to user testuser for anything on the 'myvhost' virtual host, run the following:
 
-rabbitmqctl set_permissions -p /myvhost testuser ".*" ".*" ".*"
+	rabbitmqctl set_permissions -p /myvhost testuser ".*" ".*" ".*"
 
 
 ## Usage ##
