@@ -86,17 +86,37 @@ public class SharedQueueWithBinding implements QueueDeclaration {
      */
     @Override
     public Queue.DeclareOk declare(Channel channel) throws IOException {
-        final Queue.DeclareOk queue;
+        Queue.DeclareOk queue;
 
         Map<String, Object> args = new HashMap<String, Object>();
         if (queue_ttl > -1) args.put("x-message-ttl", queue_ttl);
         if (queue_expires > -1) args.put("x-expires",     queue_expires);
         if (queue_max_length > -1) args.put("x-max-length",  queue_max_length);
 
-        channel.exchangeDeclare(exchange, "direct", true);
+        if (!exchange.isEmpty()) {
+            try {
+                channel.exchangeDeclarePassive(exchange);
+            } catch (IOException e) {
+                channel.exchangeDeclare(exchange, "direct", true);
+            }
+        }
 
-        queue = channel.queueDeclare(queueName,true,false,false,null);
+        /*channel.exchangeDeclare(exchange, "direct", true);
 
+        queue = channel.queueDeclare(queueName,true,false,false,null);*/
+
+        try {
+            queue = channel.queueDeclarePassive(queueName);
+         } catch (IOException e) {
+             // The arguments for queueDeclare are: name, durable, exclusive, autoDelete, args
+             // Sending an empty Map is bad form.  If it's empty, just send null
+             if (args.isEmpty()) {
+                 args = null;
+             }
+             queue = channel.queueDeclare(queueName,true,false,false,args);
+         }
+
+        
         // is this a comma separated list of routing keys?
         String[] routingKeys = routingKey.split(",");
         if (routingKeys.length > 1){
