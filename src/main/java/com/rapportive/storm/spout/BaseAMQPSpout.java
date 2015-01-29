@@ -105,7 +105,7 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
 
     protected final Scheme serialisationScheme;
 
-    protected transient boolean spoutActive = true;
+    protected boolean spoutActive = true;
     private transient Connection amqpConnection;
     protected transient Channel amqpChannel;
     protected transient QueueingConsumer amqpConsumer;
@@ -386,7 +386,9 @@ public abstract class BaseAMQPSpout extends BaseRichSpout {
     protected void reconnect() {
         log.info("Reconnecting to AMQP broker...");
         try {
-            messageIdMap.clear();
+        	if (messageIdMap != null) {
+        		messageIdMap.clear();
+        	}
             setupAMQP();
         } catch (IOException e) {
             log.warn("Failed to reconnect to AMQP broker", e);
