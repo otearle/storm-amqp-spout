@@ -47,9 +47,9 @@ To give permission to user testuser for anything on the 'myvhost' virtual host, 
 
 Once this is done, you can create your Spout:
 
-    		SharedQueueWithBinding declaration = new SharedQueueWithBinding("testQueue", "testExchange", "testRoutingKey");
+	SharedQueueWithBinding declaration = new SharedQueueWithBinding("testQueue", "testExchange", "testRoutingKey");
     		
-    		AMQPSpout amqpSpout = new AMQPSpout("localhost", 5672, "testUser", "testPassword", "myvhost", declaration, new StringScheme("args"), true, false, true);
+	AMQPSpout amqpSpout = new AMQPSpout("localhost", 5672, "testUser", "testPassword", "myvhost", declaration, new StringScheme("args"), true, false, true);
 
 This will create a durable, auto-acking spout queue. 
 
