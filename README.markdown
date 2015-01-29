@@ -21,7 +21,29 @@ messages are JSON.
 
 ## Documentation ##
 
-The Javadocs can be found at [http://code.rapportive.com/storm-amqp-spout]().
+You'll need to create a user and a vhost on the rabbitMQ server.
+
+Create user:
+
+	rabbitmqctl add_user {username} {password}m
+Create vhost:
+
+	rabbitmqctl add_vhost {vhostpath}
+
+Example:
+
+	rabbitmqctl add_vhost test
+
+Give privilages to user:
+
+	rabbitmqctl set_permissions [-p vhostpath] {user} {conf} {write} {read}
+	
+Example:
+
+To give permission to user testuser for anything on the 'myvhost' virtual host, run the following:
+
+rabbitmqctl set_permissions -p /myvhost testuser ".*" ".*" ".*"
+
 
 ## Usage ##
 
